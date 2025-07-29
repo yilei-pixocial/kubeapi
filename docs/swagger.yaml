@@ -1,0 +1,51 @@
+basePath: /
+definitions:
+  model.Message:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+      result: {}
+    type: object
+host: localhost:8888
+info:
+  contact: {}
+  title: kubeapi API
+  version: "1.0"
+paths:
+  /api/v1/k8s/namespaces:
+    get:
+      consumes:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Message'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.Message'
+      summary: 获取集群命名空间信息
+      tags:
+      - k8s
+  /api/v1/k8s/services:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Message'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.Message'
+      summary: 获取集群service信息
+      tags:
+      - k8s
+swagger: "2.0"
