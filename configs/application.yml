@@ -1,6 +1,6 @@
 # 服务器配置
 server:
-  port: 8888
+  port: 8080
 
 # 日志配置
 logger:
@@ -10,4 +10,16 @@ logger:
 
 kubernetes:
    kubeconfig: ""
+   clusterID: "test"
+   clusterName: "测试集群"
+   clusterRegionID: "default"
 
+redis:
+  addr: "172.25.83.166:6379"
+  password: ""
+  database: 3
+  keyPrefix: "cmdb-k8s-"
+
+# 定时任务配置
+
+syncInterval: 60 # 单位秒

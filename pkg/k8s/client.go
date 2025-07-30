@@ -9,12 +9,10 @@ import (
 )
 
 func NewClientSet(kubeconfigPath string) (*kubernetes.Clientset, error) {
-	// 首先尝试 InCluster 配置（如果在 Kubernetes 集群中运行）
 	if config, err := rest.InClusterConfig(); err == nil {
 		return kubernetes.NewForConfig(config)
 	}
 
-	// 否则使用 kubeconfig
 	return NewClientSetFromConfig(kubeconfigPath)
 }
 

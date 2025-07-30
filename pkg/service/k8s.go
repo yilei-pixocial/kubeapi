@@ -1,13 +1,23 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/kataras/iris/v12"
+	"github.com/kataras/iris/v12/x/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/yilei-pixocial/kubeapi/pkg/k8s"
 	"github.com/yilei-pixocial/kubeapi/pkg/sys/resp"
 	"github.com/yilei-pixocial/kubeapi/pkg/sysinit"
 	"github.com/yilei-pixocial/kubeapi/pkg/vo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 type K8sService struct {
@@ -101,4 +111,161 @@ func (k *K8sService) GetNamespaces(ctx iris.Context) {
 		return
 	}
 	return
+}
+
+func SyncToRedis() {
+
+	kubeClient, err := k8s.NewClientSetFromConfig(sysinit.GCF.UString("kubernetes.kubeconfig"))
+	if err != nil {
+		logrus.Errorf("Failed to create kubernetes clientSet from config. Err: %+v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	setupSignalHandling(cancel)
+
+	if err := syncData(ctx, kubeClient); err != nil {
+		logrus.Errorf("Initial sync failed: %v", err)
+	}
+
+	ticker := time.NewTicker(60 * time.Second) // 每60秒同步一次
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := syncData(ctx, kubeClient); err != nil {
+				logrus.Errorf("Sync failed: %v", err)
+			}
+		case <-ctx.Done():
+			logrus.Errorf("Shutting down...")
+			return
+		}
+	}
+
+}
+
+type ClusterData struct {
+	ClusterId       string                    `json:"clusterID"`
+	ClusterName     string                    `json:"clusterName"`
+	ClusterRegionID string                    `json:"clusterRegionID"`
+	K8sVersion      string                    `json:"k8sVersion"`
+	Namespaces      []vo.NamespaceVo          `json:"namespaces"`
+	Services        map[string][]vo.ServiceVo `json:"services"`
+	LastSyncTime    int64                     `json:"lastSyncTime"`
+}
+
+func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
+	logrus.Info("Starting sync...")
+
+	var clusterID, clusterName, k8sVersion, clusterRegionID string
+
+	if os.Getenv("kubernetes.clusterID") != "" {
+		clusterID = os.Getenv("kubernetes.clusterID")
+	} else if sysinit.GCF.UString("kubernetes.clusterID") != "" {
+		clusterID = sysinit.GCF.UString("kubernetes.clusterID")
+	} else {
+		return errors.New("kubernetes cluster ID is empty")
+	}
+
+	if os.Getenv("kubernetes.clusterName") != "" {
+		clusterName = os.Getenv("kubernetes.clusterName")
+	} else if sysinit.GCF.UString("kubernetes.clusterName") != "" {
+		clusterName = sysinit.GCF.UString("kubernetes.clusterName")
+	} else {
+		return errors.New("kubernetes clusterName is empty")
+	}
+
+	if os.Getenv("kubernetes.clusterRegionID") != "" {
+		clusterRegionID = os.Getenv("kubernetes.clusterRegionID")
+	} else if sysinit.GCF.UString("kubernetes.clusterRegionID") != "" {
+		clusterRegionID = sysinit.GCF.UString("kubernetes.clusterRegionID")
+	} else {
+		return errors.New("kubernetes clusterRegionID is empty")
+	}
+
+	version, err := kubeClient.Discovery().ServerVersion()
+	if err != nil {
+		logrus.Errorf("Failed to get Kubernetes server version: %v", err)
+	} else {
+		k8sVersion = version.GitVersion
+	}
+
+	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logrus.Errorf("Failed to list namespaces: %v", err)
+		return fmt.Errorf("failed to list namespaces: %w", err)
+	}
+
+	servicesMap := make(map[string][]vo.ServiceVo)
+	for _, ns := range namespaces.Items {
+		services, err := kubeClient.CoreV1().Services(ns.Name).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			logrus.Errorf("Failed to list services in namespace %s: %v", ns.Name, err)
+			continue
+		}
+
+		var serviceNames []vo.ServiceVo
+		for _, svc := range services.Items {
+			serviceNames = append(serviceNames, vo.ServiceVo{
+				Name:        svc.Name,
+				Namespace:   svc.Namespace,
+				Type:        string(svc.Spec.Type),
+				ClusterIP:   svc.Spec.ClusterIP,
+				Ports:       svc.Spec.Ports,
+				CreatedTime: svc.CreationTimestamp.UnixMilli(),
+				Selector:    svc.Spec.Selector,
+				ClusterName: clusterName,
+				ClusterID:   clusterID,
+			})
+		}
+		servicesMap[ns.Name] = serviceNames
+	}
+
+	var namespaceVos []vo.NamespaceVo
+	for _, ns := range namespaces.Items {
+		namespaceVos = append(namespaceVos, vo.NamespaceVo{
+			Name:        ns.Name,
+			CreatedTime: ns.CreationTimestamp.UnixMilli(),
+			ClusterID:   clusterID,
+			ClusterName: clusterName,
+			Status:      string(ns.Status.Phase),
+		})
+	}
+
+	data := ClusterData{
+		ClusterId:       clusterID,
+		ClusterName:     clusterName,
+		ClusterRegionID: clusterRegionID,
+		K8sVersion:      k8sVersion,
+		Namespaces:      namespaceVos,
+		Services:        servicesMap,
+		LastSyncTime:    time.Now().UnixMilli(),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	key := sysinit.GCF.UString("redis.keyPrefix") + clusterID
+	err = sysinit.RedisCli.Set(ctx, key, jsonData, 3600*time.Second).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set data in Redis: %w", err)
+	}
+
+	logrus.Infof("Sync completed for cluster %s, stored in key %s", clusterName, key)
+	return nil
+}
+
+func setupSignalHandling(cancel context.CancelFunc) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigs
+		log.Printf("Received signal: %v", sig)
+		cancel()
+	}()
 }

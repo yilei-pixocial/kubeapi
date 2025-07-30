@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/iris-contrib/swagger/v12/swaggerFiles"
+	"github.com/yilei-pixocial/kubeapi/pkg/service"
 	"github.com/yilei-pixocial/kubeapi/pkg/sysinit"
 	"github.com/yilei-pixocial/kubeapi/router"
 	"github.com/yilei-pixocial/kubeapi/router/middleware"
@@ -25,12 +26,19 @@ func main() {
 	App = iris.New()
 
 	// 初始化
-	sysinit.InitConf()
+	err := sysinit.InitConf()
+	if err != nil {
+		log.Fatal("InitConf failed:", err)
+	}
 	InitMiddleware()
 	sysinit.InitLogger()
-	sysinit.InitCron()
 	router.SetRoutes(App)
 
+	if err := sysinit.InitRedis(); err != nil {
+		log.Fatalf("Failed to initialize Redis: %v", err)
+	}
+
+	service.SyncToRedis()
 	config := &swagger.Config{
 		URL: fmt.Sprintf("http://localhost:%s/swagger/doc.json", sysinit.GCF.UString("server.port")), //The url pointing to API definition
 	}

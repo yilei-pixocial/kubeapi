@@ -3,13 +3,9 @@ package sysinit
 import (
 	"fmt"
 	"time"
-
-	"github.com/bamzi/jobrunner"
 )
 
 func InitCron() {
-	jobrunner.Start()
-	// jobrunner.Schedule("@every 2s", PrintTime{})
 
 }
 

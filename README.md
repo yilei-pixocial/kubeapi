@@ -5,7 +5,7 @@ kubeapi is a Python library that provides a simple and efficient way to interact
 ### Features
 
 - Easy-to-use interface for interacting with Kubernetes API
-- Supports all Kubernetes Namespace、Service resources
+- Supports Kubernetes Namespace、Service resources
 
 ### Starting with kubeapi
 
@@ -13,5 +13,11 @@ kubeapi is a Python library that provides a simple and efficient way to interact
 swag init
 
 go run main.go
+```
+
+### Running with Docker
+
+```shell
+docker run --network=host -v $HOME/.kube/config:/root/.kube/config:ro -v $(pwd)/configs:/root/configs docker.io/library/kubeapi:v0.0.1
 ```
 

@@ -15,7 +15,6 @@ import (
 
 func SetRoutes(app *iris.Application) {
 
-	// 1. 定义 Prometheus 指标
 	requestCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -33,15 +32,11 @@ func SetRoutes(app *iris.Application) {
 		[]string{"method", "path", "status"},
 	)
 
-	// 2. 注册指标
 	prometheus.MustRegister(requestCounter, requestDuration)
 
-	// 3. 添加 Prometheus 中间件
 	app.Use(func(ctx iris.Context) {
 		start := time.Now()
-		ctx.Next() // 继续处理请求
-
-		// 记录请求信息
+		ctx.Next()
 		duration := time.Since(start).Seconds()
 		status := ctx.GetStatusCode()
 		method := ctx.Method()
@@ -51,10 +46,8 @@ func SetRoutes(app *iris.Application) {
 		requestDuration.WithLabelValues(method, path, fmt.Sprintf("%d", status)).Observe(duration)
 	})
 
-	// 4. 暴露 Prometheus 指标端点（默认 `/metrics`）
 	app.Get("/metrics", iris.FromStd(promhttp.Handler()))
 
-	//根API
 	rootApi := app.Party("api/v1")
 
 	k8s, err := service.NewK8sService()

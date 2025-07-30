@@ -3,8 +3,8 @@ module github.com/yilei-pixocial/kubeapi
 go 1.24.5
 
 require (
-	github.com/bamzi/jobrunner v1.0.0
 	github.com/didip/tollbooth v4.0.2+incompatible
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/iris-contrib/swagger/v12 v12.0.1
 	github.com/jinzhu/gorm v1.9.16
 	github.com/juju/ratelimit v1.0.1
@@ -12,6 +12,7 @@ require (
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/olebedev/config v0.0.0-20190528211619-364964f3a8e4
 	github.com/prometheus/client_golang v1.22.0
+	github.com/sirupsen/logrus v1.9.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/swag v1.16.5
 	github.com/taoey/iris-admin v0.0.0-20231014122314-f9427d055066
@@ -34,6 +35,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/flosch/pongo2/v4 v4.0.2 // indirect
@@ -73,10 +75,8 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/schollz/closestmatch v2.1.0+incompatible // indirect
-	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tdewolff/minify/v2 v2.20.19 // indirect
 	github.com/tdewolff/parse/v2 v2.7.12 // indirect
