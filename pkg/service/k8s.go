@@ -143,7 +143,6 @@ func SyncToRedis() {
 			return
 		}
 	}
-
 }
 
 type ClusterData struct {
@@ -153,7 +152,6 @@ type ClusterData struct {
 	K8sVersion      string                    `json:"k8sVersion"`
 	Namespaces      []vo.NamespaceVo          `json:"namespaces"`
 	Services        map[string][]vo.ServiceVo `json:"services"`
-	LastSyncTime    int64                     `json:"lastSyncTime"`
 }
 
 func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
@@ -241,7 +239,6 @@ func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
 		K8sVersion:      k8sVersion,
 		Namespaces:      namespaceVos,
 		Services:        servicesMap,
-		LastSyncTime:    time.Now().UnixMilli(),
 	}
 
 	jsonData, err := json.Marshal(data)
