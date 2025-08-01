@@ -61,14 +61,16 @@ func (k *K8sService) GetServices(ctx iris.Context) {
 		}
 
 		for _, svc := range serviceList.Items {
+			createAt := time.Unix(0, svc.CreationTimestamp.UnixMilli()*int64(time.Millisecond)).
+				Format("2006-01-02 15:04:05")
 			results = append(results, vo.ServiceVo{
-				Name:        svc.Name,
-				Namespace:   svc.Namespace,
-				Type:        string(svc.Spec.Type),
-				ClusterIP:   svc.Spec.ClusterIP,
-				Ports:       svc.Spec.Ports,
-				CreatedTime: svc.CreationTimestamp.UnixMilli(),
-				Selector:    svc.Spec.Selector,
+				Name:       svc.Name,
+				Namespace:  svc.Namespace,
+				Type:       string(svc.Spec.Type),
+				ClusterIP:  svc.Spec.ClusterIP,
+				Ports:      svc.Spec.Ports,
+				CreateTime: createAt,
+				Selector:   svc.Spec.Selector,
 			})
 		}
 	}
@@ -99,8 +101,9 @@ func (k *K8sService) GetNamespaces(ctx iris.Context) {
 	for _, ns := range namespaceList.Items {
 		if ns.Status.Phase == "Active" {
 			results = append(results, vo.NamespaceVo{
-				Name:        ns.Name,
-				CreatedTime: ns.CreationTimestamp.UnixMilli(),
+				Name: ns.Name,
+				CreateTime: time.Unix(0, ns.CreationTimestamp.UnixMilli()*int64(time.Millisecond)).
+					Format("2006-01-02 15:04:05"),
 			})
 		}
 	}
@@ -146,12 +149,12 @@ func SyncToRedis() {
 }
 
 type ClusterData struct {
-	ClusterId       string                    `json:"clusterID"`
-	ClusterName     string                    `json:"clusterName"`
-	ClusterRegionID string                    `json:"clusterRegionID"`
-	K8sVersion      string                    `json:"k8sVersion"`
-	Namespaces      []vo.NamespaceVo          `json:"namespaces"`
-	Services        map[string][]vo.ServiceVo `json:"services"`
+	ClusterId       string           `json:"clusterID"`
+	ClusterName     string           `json:"clusterName"`
+	ClusterRegionID string           `json:"clusterRegionID"`
+	K8sVersion      string           `json:"k8sVersion"`
+	Namespaces      []vo.NamespaceVo `json:"namespaces"`
+	Services        []vo.ServiceVo   `json:"services"`
 }
 
 func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
@@ -196,7 +199,7 @@ func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
 		return fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
-	servicesMap := make(map[string][]vo.ServiceVo)
+	var serviceVos []vo.ServiceVo
 	for _, ns := range namespaces.Items {
 		services, err := kubeClient.CoreV1().Services(ns.Name).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -204,28 +207,31 @@ func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
 			continue
 		}
 
-		var serviceNames []vo.ServiceVo
 		for _, svc := range services.Items {
-			serviceNames = append(serviceNames, vo.ServiceVo{
-				Name:        svc.Name,
-				Namespace:   svc.Namespace,
-				Type:        string(svc.Spec.Type),
-				ClusterIP:   svc.Spec.ClusterIP,
-				Ports:       svc.Spec.Ports,
-				CreatedTime: svc.CreationTimestamp.UnixMilli(),
+			serviceVos = append(serviceVos, vo.ServiceVo{
+				ServiceID: fmt.Sprintf("%s/%s/%s", clusterID, ns.Name, svc.Name),
+				Name:      svc.Name,
+				Namespace: svc.Namespace,
+				Type:      string(svc.Spec.Type),
+				ClusterIP: svc.Spec.ClusterIP,
+				Ports:     svc.Spec.Ports,
+				CreateTime: time.Unix(0, svc.CreationTimestamp.UnixMilli()*int64(time.Millisecond)).
+					Format("2006-01-02 15:04:05"),
 				Selector:    svc.Spec.Selector,
 				ClusterName: clusterName,
 				ClusterID:   clusterID,
+				NamespaceID: fmt.Sprintf("%s/%s", clusterID, ns.Name),
 			})
 		}
-		servicesMap[ns.Name] = serviceNames
 	}
 
 	var namespaceVos []vo.NamespaceVo
 	for _, ns := range namespaces.Items {
 		namespaceVos = append(namespaceVos, vo.NamespaceVo{
+			NamespaceID: fmt.Sprintf("%s/%s", clusterID, ns.Name),
 			Name:        ns.Name,
-			CreatedTime: ns.CreationTimestamp.UnixMilli(),
+			CreateTime: time.Unix(0, ns.CreationTimestamp.UnixMilli()*int64(time.Millisecond)).
+				Format("2006-01-02 15:04:05"),
 			ClusterID:   clusterID,
 			ClusterName: clusterName,
 			Status:      string(ns.Status.Phase),
@@ -238,7 +244,7 @@ func syncData(ctx context.Context, kubeClient *kubernetes.Clientset) error {
 		ClusterRegionID: clusterRegionID,
 		K8sVersion:      k8sVersion,
 		Namespaces:      namespaceVos,
-		Services:        servicesMap,
+		Services:        serviceVos,
 	}
 
 	jsonData, err := json.Marshal(data)
